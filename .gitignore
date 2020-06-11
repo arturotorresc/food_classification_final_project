@@ -4,3 +4,8 @@ data/dumplings/*
 data/pizza/*
 data/sandwich/*
 data/wine/*
+env/*
+data/test/*
+data/train/*
+data/valid/*
+

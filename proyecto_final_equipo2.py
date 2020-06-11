@@ -15,23 +15,40 @@ Original file is located at
 """
 
 # Para uso en colab
-from google.colab import drive
-drive.mount('/content/drive')
+# from google.colab import drive
+# drive.mount('/content/drive')
 
 # ==== FOR REFERENCE =====
 # ['wines.txt', 'bubble_gums.txt', 'dumplings.txt', 'pizza_urls.txt', 'sandwich.txt']
 # =========== ============
 url_files = ['wines.txt', 'bubble_gums.txt', 'dumplings.txt', 'pizza_urls.txt', 'sandwich.txt']
 
-# Iteramos por cada uno de los archivos y obtenemos los URLs de las imagenes.
-print("Reading files containing images urls")
-urls = []
-for file_name in url_files:
-  with open(file_name) as f:
-    content = f.readlines()
-    content = [url.strip() for url in content]
-    print("Reading {} image urls ({})".format(len(content), file_name))
-    urls.append(content)
+# ==== FOR REFERENCE =====
+# ['wine','bubble_gum', 'dumplings', 'pizza', 'sandwich']
+# ========================
+categories = ['wine', 'bubble_gum', 'dumplings', 'pizza', 'sandwich']
+
+data_directory = './data' # Where image data and models will be stored
+
+def read_urls_from_txt(files):
+  """Reads all urls from the txt files in files
+
+  Args:
+      files (list): List of txt files
+
+  Returns:
+      array: an array with all urls extracted by category 
+  """
+  # Iteramos por cada uno de los archivos y obtenemos los URLs de las imagenes.
+  print("Reading files containing images urls")
+  urls = []
+  for file_name in files:
+    with open(f'{data_directory}/{file_name}') as f:
+      content = f.readlines()
+      content = [url.strip() for url in content]
+      print(f'Reading {len(content)} image urls ({file_name})')
+      urls.append(content)
+  return urls
 
 # Utilizaremos urllib para descargar las imagenes utilizando URLs obtenidos de ImageNet
 import urllib.request
@@ -41,39 +58,124 @@ import uuid
 from itertools import repeat
 
 def download_from_url(category_url):
+  """Downloads a single an image from the given url with urllib.
+
+  Args:
+      category_url (tuple): A tuple containing a url and its category in the form (category, url)
+
+  Returns:
+      str: A string with the url if success, an error string otherwise
+  """
   category, url = category_url
   print(f'Downloading {url} for category {category}')
   try:
-    urllib.request.urlretrieve(url, f'./data/{category}/{uuid.uuid4()}.jpg')
+    urllib.request.urlretrieve(url, f'{data_directory}/{category}/{uuid.uuid4()}.jpg')
     return url
   except Exception as e:
     print('Error')
     return f'Error: {e}'
 
 def download_category_from_url(category, urls):
+  """Download images from all urls from a given category
+
+  Args:
+      category (str): The category name
+      urls (list): A list of urls from the category
+
+  Returns:
+      A ThreadPoolExecutor results: The results from the ThreadPoolExecutor
+  """
   try:
     print(f'Creating directory to store {category} images')
-    os.mkdir(f'./data/{category}')
+    os.mkdir(f'{data_directory}/{category}')
   except FileExistsError:
-    print(f'./data/{category} directory exists, continuing...')
+    print(f'{data_directory}/{category} directory exists, continuing...')
   except Exception as e:
     print(e)
   else:
     print(f'Succesfully created {category}/ directory')
   results = None
   with ThreadPoolExecutor(max_workers=5) as executor:
-    return executor.map(download_from_url, zip(repeat(category), urls), timeout=2)
+    return executor.map(download_from_url, zip(repeat(category), urls), timeout=0.5)
 
-# ==== FOR REFERENCE =====
-# ['wine','bubble_gum', 'dumplings', 'pizza', 'sandwich']
-# ========================
-categories = ['pizza', 'sandwich'] # wine bubble_gum
 try:
-  os.mkdir("./data")
+  os.mkdir(data_directory)
 except FileExistsError:
   print('data directory exists, continuing...')
-for idx, category in enumerate(categories):
-  download_category_from_url(category, urls[idx])
+
+# urls = read_urls_from_txt(url_files)
+# for idx, category in enumerate(categories):
+#   download_category_from_url(category, urls[idx])
 
 """## Generación de datos"""
+import numpy as np
+import imgaug.augmenters as iaa
+import cv2
+import glob
 
+def augment_data():
+  """
+  Generates new data based on downloaded images by applying left-to-right flip
+  and Gaussian Blur.
+  """
+  print('Augmenting data by flipping and Gaussian Blur...')
+  seq = iaa.Sequential([
+    iaa.Fliplr(0.5),
+    iaa.GaussianBlur(sigma=(0, 3.0))
+  ])
+
+  for category in categories:
+    batch = []
+    for filename in glob.iglob(f'{data_directory}/{category}/*'):
+      print(f'Reading {filename}')
+      try:
+        im = cv2.imread(filename)
+        cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        batch.append(im)
+      except Exception as e:
+        print(f'Error on image: {filename}, continuing...')
+    images_aug = seq(images=np.array(batch))
+    for image in images_aug:
+      cv2.imwrite(f'{data_directory}/{category}/{uuid.uuid4()}.jpg', image)
+      print(f'Artificial data saved for category {category}')
+    print(f'=== {len(batch)} new images added to category {category} ===')
+
+# augment_data()
+
+"""## Separar train, test y validate"""
+
+import random
+import shutil
+
+try:
+  os.mkdir(f'{data_directory}/train')
+except FileExistsError as e:
+  print('train directory already exists, continuing...')
+try:
+  os.mkdir(f'{data_directory}/test')
+except FileExistsError as e:
+  print('test directory already exists, continuing...')
+try:
+  os.mkdir(f'{data_directory}/valid')
+except FileExistsError as e:
+  print('validate directory already exists, continuing...')
+
+for category in categories:
+  try:
+    os.mkdir(f'{data_directory}/train/{category}')
+    os.mkdir(f'{data_directory}/valid/{category}')
+    os.mkdir(f'{data_directory}/test/{category}')
+  except FileExistsError as e:
+    print(f'{category} directory already exists, continuing...')
+
+  images = glob.glob(f'{data_directory}/{category}/*')
+  for i in random.sample(images, int(len(images) * 0.8)):
+    shutil.move(i, f'{data_directory}/train/{category}/')
+  images = glob.glob(f'{data_directory}/{category}/*')
+  for i in random.sample(images, int(len(images) * 0.5)):
+    shutil.move(i, f'{data_directory}/valid/{category}/')
+  images = glob.glob(f'{data_directory}/{category}/*')
+  for i in random.sample(images, int(len(images))):
+    shutil.move(i, f'{data_directory}/test/{category}/')
+
+  os.remove(f'{data_directory}/{category}')
