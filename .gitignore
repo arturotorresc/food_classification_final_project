@@ -1,11 +1,6 @@
 .DS_STORE
-data/bubble_gum/*
-data/dumplings/*
-data/pizza/*
-data/sandwich/*
-data/wine/*
+data/**/
 env/*
-data/test/*
-data/train/*
-data/valid/*
 
+# Jupyter Notebook
+.ipynb_checkpoints
