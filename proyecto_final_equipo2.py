@@ -21,12 +21,12 @@ Original file is located at
 # ==== FOR REFERENCE =====
 # ['wines.txt', 'bubble_gums.txt', 'dumplings.txt', 'pizza_urls.txt', 'sandwich.txt']
 # =========== ============
-url_files = ['wines.txt', 'bubble_gums.txt', 'dumplings.txt', 'pizza_urls.txt', 'sandwich.txt']
+url_files = ['wines.txt', 'bubble_gums.txt', 'dumplings.txt', 'pizza.txt', 'sandwich.txt']
 
 # ==== FOR REFERENCE =====
 # ['wine','bubble_gum', 'dumplings', 'pizza', 'sandwich']
 # ========================
-categories = ['wine', 'bubble_gum', 'dumplings', 'pizza', 'sandwich']
+categories = ['wine', 'bubble_gum', 'dumpling', 'pizza', 'sandwich']
 
 data_directory = './data' # Where image data and models will be stored
 
@@ -120,25 +120,38 @@ def augment_data():
   """
   print('Augmenting data by flipping and Gaussian Blur...')
   seq = iaa.Sequential([
-    iaa.Fliplr(0.5),
-    iaa.GaussianBlur(sigma=(0, 3.0))
-  ])
+    iaa.Fliplr(0.65),
+    iaa.Sometimes(then_list=[
+      iaa.OneOf([
+        iaa.GammaContrast(gamma=(0.5, 1.75)),
+        iaa.GaussianBlur(sigma=(0, 2.0))
+      ])
+    ]),
+    iaa.Sometimes(p=0.55, then_list=[
+      iaa.AdditiveGaussianNoise(scale=0.10*255)
+    ]),
+    iaa.Sometimes(p=0.3, then_list=[
+      iaa.SaltAndPepper(p=0.05)
+    ])
+  ], random_order=True)
 
-  for category in categories:
-    batch = []
-    for filename in glob.iglob(f'{data_directory}/{category}/*'):
-      print(f'Reading {filename}')
-      try:
-        im = cv2.imread(filename)
-        cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-        batch.append(im)
-      except Exception as e:
-        print(f'Error on image: {filename}, continuing...')
-    images_aug = seq(images=np.array(batch))
-    for image in images_aug:
-      cv2.imwrite(f'{data_directory}/{category}/{uuid.uuid4()}.jpg', image)
-      print(f'Artificial data saved for category {category}')
-    print(f'=== {len(batch)} new images added to category {category} ===')
+  for sec in ['test', 'train', 'valid']:
+    for category in categories:
+      batch = []
+      for filename in glob.iglob(f'{data_directory}/{sec}/{category}/*'):
+        print(f'Reading {filename}')
+        try:
+          im = cv2.imread(filename)
+          cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+          batch.append(im)
+          batch.append(im)
+        except Exception as e:
+          print(f'Error on image: {filename}, continuing...')
+      images_aug = seq(images=np.array(batch))
+      for image in images_aug:
+        cv2.imwrite(f'{data_directory}/{sec}/{category}/{uuid.uuid4()}.jpg', image)
+        print(f'Artificial data saved for category {category}')
+      print(f'=== {len(batch)} new images added to category {category} ===')
 
 # augment_data()
 
@@ -146,6 +159,23 @@ def augment_data():
 
 import random
 import shutil
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Activation, Dense, Flatten, BatchNormalization, Conv2D, MaxPool2D, MaxPooling2D, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.metrics import categorical_crossentropy
+from tensorflow.keras.models import load_model
+from sklearn.metrics import confusion_matrix
+import itertools
+# import os
+# import shutil
+# import random
+# import glob
+import matplotlib.pyplot as plt
+# import warnings
 
 try:
   os.mkdir(f'{data_directory}/train')
@@ -168,14 +198,138 @@ for category in categories:
   except FileExistsError as e:
     print(f'{category} directory already exists, continuing...')
 
-  images = glob.glob(f'{data_directory}/{category}/*')
-  for i in random.sample(images, int(len(images) * 0.8)):
-    shutil.move(i, f'{data_directory}/train/{category}/')
-  images = glob.glob(f'{data_directory}/{category}/*')
-  for i in random.sample(images, int(len(images) * 0.5)):
-    shutil.move(i, f'{data_directory}/valid/{category}/')
-  images = glob.glob(f'{data_directory}/{category}/*')
-  for i in random.sample(images, int(len(images))):
-    shutil.move(i, f'{data_directory}/test/{category}/')
+  try:
+    images = glob.glob(f'{data_directory}/{category}/*')
+    for i in random.sample(images, int(len(images) * 0.8)):
+      shutil.move(i, f'{data_directory}/train/{category}/')
+    images = glob.glob(f'{data_directory}/{category}/*')
+    for i in random.sample(images, int(len(images) * 0.5)):
+      shutil.move(i, f'{data_directory}/valid/{category}/')
+    images = glob.glob(f'{data_directory}/{category}/*')
+    for i in random.sample(images, int(len(images))):
+      shutil.move(i, f'{data_directory}/test/{category}/')
 
-  os.remove(f'{data_directory}/{category}')
+    os.rmdir(f'{data_directory}/{category}')
+  except FileNotFoundError as e:
+    print('Directory already deleted, continuing...')
+
+def clean_images():
+  dirs = ['train', 'test', 'valid']
+  for d in dirs:
+    for category in categories:
+      for f in glob.glob(f'{data_directory}/{d}/{category}/*'):
+        try:
+          im = cv2.imread(f)
+          cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+          with open(f, 'rb') as fl:
+            check_chars = fl.read()[-2:]
+          if check_chars != b'\xff\xd9':
+            print('Not complete image')
+            os.remove(f)
+          else:
+            print(f'{f} image ok')
+        except Exception as e:
+          os.remove(f)
+          print(f'{f} image erased')
+
+# clean_images()
+
+train_data = f'{data_directory}/train'
+test_data = f'{data_directory}/test'
+valid_data = f'{data_directory}/valid'
+
+batch_size = 10
+
+train_batches = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input) \
+  .flow_from_directory(directory=train_data, target_size=(224,224), classes=['wine', 'pizza', 'bubble_gum', 'dumpling', 'sandwich'], batch_size=batch_size)
+test_batches = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input) \
+  .flow_from_directory(directory=test_data, target_size=(224,224), classes=['wine', 'pizza', 'bubble_gum', 'dumpling', 'sandwich'], batch_size=batch_size, shuffle=False)
+valid_batches = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input) \
+  .flow_from_directory(directory=valid_data, target_size=(224,224), classes=['wine', 'pizza', 'bubble_gum', 'dumpling', 'sandwich'], batch_size=batch_size)
+
+# def plotImages(images_arr):
+#   fig, axes = plt.subplots(1, 10, figsize=(20,20))
+#   axes = axes.flatten()
+#   for img, ax in zip( images_arr, axes):
+#       ax.imshow(img)
+#       ax.axis('off')
+#   plt.tight_layout()
+#   plt.show()
+
+# # imgs, labels = next(train_batches)
+
+# # plotImages(imgs)
+# # print(labels)
+
+vgg16_model = tf.keras.applications.vgg16.VGG16()
+
+model = Sequential()
+for layer in vgg16_model.layers[:-1]:
+  model.add(layer)
+
+for layer in model.layers:
+  layer.trainable = False
+
+model.add(Dense(units=5, activation='softmax'))
+
+
+# model = Sequential([
+#   Conv2D(filters=32, kernel_size=(3, 3), activation='relu', padding = 'same', input_shape=(224,224,3)),
+#   MaxPool2D(pool_size=(2, 2), strides=2),
+#   Conv2D(filters=64, kernel_size=(3, 3), activation='relu', padding = 'same'),
+#   MaxPool2D(pool_size=(2, 2), strides=2),
+#   Flatten(),
+#   Dense(units=5, activation='softmax')
+# ])
+# 0.0001
+model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics=['accuracy'])
+
+model.fit(
+  x=train_batches,
+  validation_data=valid_batches,
+  epochs=10,
+  verbose=2
+)
+model.save('fourth_try.h5')
+
+def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+  """
+  This function prints and plots the confusion matrix.
+  Normalization can be applied by setting `normalize=True`.
+  """
+  plt.imshow(cm, interpolation='nearest', cmap=cmap)
+  plt.title(title)
+  plt.colorbar()
+  tick_marks = np.arange(len(classes))
+  plt.xticks(tick_marks, classes, rotation=45)
+  plt.yticks(tick_marks, classes)
+
+  if normalize:
+      cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+      print("Normalized confusion matrix")
+  else:
+      print('Confusion matrix, without normalization')
+
+  print(cm)
+
+  thresh = cm.max() / 2.
+  for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+      plt.text(j, i, cm[i, j],
+          horizontalalignment="center",
+          color="white" if cm[i, j] > thresh else "black")
+
+  plt.tight_layout()
+  plt.ylabel('True label')
+  plt.xlabel('Predicted label')
+
+
+model = load_model('first_try.h5')
+
+predictions = model.predict(x=test_batches, verbose=0)
+
+cm = confusion_matrix(y_true=test_batches.classes, y_pred=np.argmax(predictions, axis=-1))
+
+plot_confusion_matrix(cm=cm, classes=categories, title='Confusion Matrix')
