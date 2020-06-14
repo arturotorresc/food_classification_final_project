@@ -14,7 +14,8 @@ Para obtener los datos se utilizó image-net.org para descargar los urls de las 
 
 ## Modelos
 
-Terminamos con dos modelos diferentes porcentajes de precisión.
+Terminamos con dos modelos con distintos porcentajes de precisión.
+El modelo **final** es el que utiliza transfer learning, pero quisimos dejar el otro modelo para mostrar distintas alternativas que tomamos.
 * Uno fue entrenado con Transfer Learning y obtuvo **96%** de precisión (basado en VGGA 16)
   * Se utilizaron *10 epochs*.
   * El código para entrenar el modelo utilizando transfer learning se encuentra en el branch *jmp-CNNModel*
