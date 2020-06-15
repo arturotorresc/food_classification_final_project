@@ -120,9 +120,20 @@ def augment_data():
   """
   print('Augmenting data by flipping and Gaussian Blur...')
   seq = iaa.Sequential([
-    iaa.Fliplr(0.5),
-    iaa.GaussianBlur(sigma=(0, 3.0))
-  ])
+    iaa.Fliplr(0.65),
+    iaa.Sometimes(then_list=[
+      iaa.OneOf([
+        iaa.GammaContrast(gamma=(0.5, 1.75)),
+        iaa.GaussianBlur(sigma=(0, 2.0))
+      ])
+    ]),
+    iaa.Sometimes(p=0.55, then_list=[
+      iaa.AdditiveGaussianNoise(scale=0.10*255)
+    ]),
+    iaa.Sometimes(p=0.3, then_list=[
+      iaa.SaltAndPepper(p=0.05)
+    ])
+  ], random_order=True)
 
   for category in categories:
     batch = []
@@ -131,6 +142,7 @@ def augment_data():
       try:
         im = cv2.imread(filename)
         cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        batch.append(im)
         batch.append(im)
       except Exception as e:
         print(f'Error on image: {filename}, continuing...')
@@ -148,6 +160,23 @@ augment_data()
 
 import random
 import shutil
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Activation, Dense, Flatten, BatchNormalization, Conv2D, MaxPool2D, MaxPooling2D, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.metrics import categorical_crossentropy
+from tensorflow.keras.models import load_model
+from sklearn.metrics import confusion_matrix
+import itertools
+# import os
+# import shutil
+# import random
+# import glob
+import matplotlib.pyplot as plt
+# import warnings
 
 try:
   os.mkdir(f'{data_directory}/train')
