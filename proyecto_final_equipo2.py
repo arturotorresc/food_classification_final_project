@@ -11,6 +11,7 @@ Original file is located at
 ### Jorge Arturo Torres Cruz - A01176590
 ### Juan Manuel Pérez Font - A00819815
 ### Sergio López Madriz - A01064725
+### Ricardo Azael Rodriguez - A00815665
 
 ## Librerías
 """
