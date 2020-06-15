@@ -135,23 +135,22 @@ def augment_data():
     ])
   ], random_order=True)
 
-  for sec in ['test', 'train', 'valid']:
-    for category in categories:
-      batch = []
-      for filename in glob.iglob(f'{data_directory}/{sec}/{category}/*'):
-        print(f'Reading {filename}')
-        try:
-          im = cv2.imread(filename)
-          cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-          batch.append(im)
-          batch.append(im)
-        except Exception as e:
-          print(f'Error on image: {filename}, continuing...')
-      images_aug = seq(images=np.array(batch))
-      for image in images_aug:
-        cv2.imwrite(f'{data_directory}/{sec}/{category}/{uuid.uuid4()}.jpg', image)
-        print(f'Artificial data saved for category {category}')
-      print(f'=== {len(batch)} new images added to category {category} ===')
+  for category in categories:
+    batch = []
+    for filename in glob.iglob(f'{data_directory}/{category}/*'):
+      print(f'Reading {filename}')
+      try:
+        im = cv2.imread(filename)
+        cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        batch.append(im)
+        batch.append(im)
+      except Exception as e:
+        print(f'Error on image: {filename}, continuing...')
+    images_aug = seq(images=np.array(batch))
+    for image in images_aug:
+      cv2.imwrite(f'{data_directory}/{category}/{uuid.uuid4()}.jpg', image)
+      print(f'Artificial data saved for category {category}')
+    print(f'=== {len(batch)} new images added to category {category} ===')
 
 augment_data()
 
