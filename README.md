@@ -18,7 +18,7 @@ Terminamos con dos modelos con distintos porcentajes de precisión.
 El modelo **final** es el que utiliza transfer learning, pero quisimos dejar el otro modelo para mostrar distintas alternativas que tomamos.
 * Uno fue entrenado con Transfer Learning y obtuvo **96%** de precisión (basado en VGGA 16)
   * Se utilizaron *10 epochs*.
-  * El código para entrenar el modelo utilizando transfer learning se encuentra en el branch *jmp-CNNModel*
+  * El código para entrenar el modelo utilizando transfer learning se encuentra en el archivo *vgg16_classifier.ipynb*
 * Uno fue entrenado desde cero y obtuvo **78.4%** de precisión
   * Se utilizaron *75 epochs*.
-  * Este código es el que se encuentra en el branch *master*
+  * Este código es el que se encuentra en el archivo *proyecto_final_equipo2.ipynb*
