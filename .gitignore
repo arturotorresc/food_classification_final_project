@@ -4,6 +4,9 @@ data/bubble_gum/
 data/dumpling/
 data/pizza/
 data/sandwich/
+data/test
+data/validation
+data/train
 env/*
 
 # Jupyter Notebook
